@@ -1,0 +1,58 @@
+name: build-cepheus-15
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["15"]
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost /opt/hostedtoolcache
+          df -h /
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential bc bison flex libssl-dev libelf-dev python3 \
+            clang-16 lld-16 llvm-16 \
+            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+          clang-16 --version
+          ld.lld-16 --version
+
+      - name: Configure (cepheus_defconfig)
+        run: make O=out ARCH=arm64 cepheus_defconfig
+
+      - name: Build Image.gz
+        run: |
+          make -j"$(nproc)" O=out ARCH=arm64 \
+            CC=clang-16 LD=ld.lld-16 \
+            AR=llvm-ar-16 NM=llvm-nm-16 OBJCOPY=llvm-objcopy-16 \
+            OBJDUMP=llvm-objdump-16 STRIP=llvm-strip-16 \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            Image.gz
+
+      - name: Report result
+        if: always()
+        run: |
+          echo "=== boot dir ==="
+          ls -l out/arch/arm64/boot/ || true
+          test -f out/arch/arm64/boot/Image.gz && echo "IMAGE_OK" || echo "IMAGE_MISSING"
+
+      - name: Upload Image.gz
+        uses: actions/upload-artifact@v4
+        with:
+          name: cepheus-Image.gz
+          path: out/arch/arm64/boot/Image.gz
+          if-no-files-found: error
