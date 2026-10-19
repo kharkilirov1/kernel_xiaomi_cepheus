@@ -29,6 +29,20 @@ jobs:
           clang-16 --version
           ld.lld-16 --version
 
+      - name: Prepare KernelSU stub
+        run: |
+          # Branch 15 references drivers/kernelsu/Kconfig but does not ship that
+          # directory (the author keeps it locally). CONFIG_KSU is not enabled in
+          # cepheus_defconfig, so an empty stub reproduces the stock build.
+          if [ ! -f drivers/kernelsu/Kconfig ]; then
+            mkdir -p drivers/kernelsu
+            echo '# KernelSU sources are not shipped in this branch; build stub.' > drivers/kernelsu/Kconfig
+            echo '# stub' > drivers/kernelsu/Makefile
+            echo "stub created"
+          else
+            echo "kernelsu present"
+          fi
+
       - name: Configure (cepheus_defconfig)
         run: make O=out ARCH=arm64 cepheus_defconfig
 
